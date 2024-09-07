@@ -1,5 +1,9 @@
 # %%
 import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+from sklearn.cluster import KMeans
+from sklearn.preprocessing import StandardScaler
 dt=pd.read_csv("Mall_Customers.csv")
 print("Data Read!")
 
@@ -15,8 +19,7 @@ print(dt.isnull().sum())
 
 
 # %%
-import matplotlib.pyplot as plt
-import seaborn as sns
+
 
 # Histograms for age, income and spending score
 dt[['Age', 'Annual Income (k$)', 'Spending Score (1-100)']].hist(bins=15, figsize=(15, 6), layout=(1, 3))
@@ -31,7 +34,6 @@ plt.show()
 
 
 # %%
-# If there's categorical data like Gender, you might want to convert it to numerical:
 dt['Gender'] = dt['Gender'].map({'Female': 0, 'Male': 1})
 
 # Selecting relevant features for clustering:
@@ -51,9 +53,6 @@ plt.show()
 
 
 # %%
-
-
-
 # Boxplots to check for outliers in the numerical columns
 for column in ['Age', 'Annual Income (k$)', 'Spending Score (1-100)']:
     plt.figure(figsize=(7, 4))
@@ -63,11 +62,9 @@ for column in ['Age', 'Annual Income (k$)', 'Spending Score (1-100)']:
 
 
 # %%
-from sklearn.cluster import KMeans
-from sklearn.preprocessing import StandardScaler
+
 scaler = StandardScaler()
 data_scaled = scaler.fit_transform(dt[['Annual Income (k$)', 'Spending Score (1-100)']])  # Scaling the features
-# Choose a number of clusters based on strategic decisions
 kmeans = KMeans(n_clusters=3, random_state=42)
 clusters = kmeans.fit_predict(data_scaled)
 dt['Cluster'] = clusters
@@ -76,21 +73,84 @@ dt['Cluster'] = clusters
 
 # %%
 plt.figure(figsize=(10, 6))
-plt.scatter(data_scaled[:, 0], data_scaled[:, 1], c=clusters, cmap='viridis')
-plt.scatter(kmeans.cluster_centers_[:, 0], kmeans.cluster_centers_[:, 1], s=300, c='red', label='Centroids')
-plt.title('Customer Segmentation')
-plt.xlabel('Annual Income (k$) (scaled)')
-plt.ylabel('Spending Score (1-100) (scaled)')
+for cluster_label, color, description in zip([0, 1, 2], ['yellow', 'purple', 'blue'], 
+                                            ['Low-income, Low-spending', 'Moderate Income, Low Spending', 'High Income, High Spending']):
+    # Filter data by cluster
+    cluster_data = dt[dt['Cluster'] == cluster_label]
+    plt.scatter(cluster_data['Annual Income (k$)'], cluster_data['Spending Score (1-100)'], 
+                c=color, label=f'{description} (Cluster {cluster_label})')
+
+plt.title('Customer Segmentation by Income and Spending')
+plt.xlabel('Annual Income (k$)')
+plt.ylabel('Spending Score (1-100)')
 plt.legend()
 plt.show()
-
 
 # %%
 from sklearn.metrics import silhouette_score
 
-# Assuming 'data_scaled' is your scaled feature set and 'clusters' are the cluster labels from K-Means
+#'data_scaled' is  scaled feature set and 'clusters' are the cluster labels from K-Means
 score = silhouette_score(data_scaled, clusters)
 print('Silhouette Score: {:.2f}'.format(score))
+
+
+# %%
+# Mapping of cluster labels to descriptions
+cluster_descriptions = {
+    0: 'Low-income, Low-spending',
+    1: 'Moderate Income, Low Spending',
+    2: 'High Income, High Spending'
+}
+
+# Plotting Age vs Spending Score for each cluster with descriptive labels
+for cluster_label in dt['Cluster'].unique():
+    cluster_data = dt[dt['Cluster'] == cluster_label]
+    plt.figure(figsize=(10, 6))
+    sns.scatterplot(x='Age', y='Spending Score (1-100)', data=cluster_data, 
+                    label=f'{cluster_descriptions[cluster_label]} (Cluster {cluster_label})')
+    plt.title(f'Age vs Spending Score - {cluster_descriptions[cluster_label]}')
+    plt.xlabel('Age')
+    plt.ylabel('Spending Score')
+    plt.legend()
+    plt.show()
+
+# Plotting Age vs Annual Income for each cluster with descriptive labels
+for cluster_label in dt['Cluster'].unique():
+    cluster_data = dt[dt['Cluster'] == cluster_label]
+    plt.figure(figsize=(10, 6))
+    sns.scatterplot(x='Age', y='Annual Income (k$)', data=cluster_data, 
+                    label=f'{cluster_descriptions[cluster_label]} (Cluster {cluster_label})')
+    plt.title(f'Age vs Annual Income - {cluster_descriptions[cluster_label]}')
+    plt.xlabel('Age')
+    plt.ylabel('Annual Income (k$)')
+    plt.legend()
+    plt.show()
+
+
+# %%
+import numpy as np
+
+def predict_customer_cluster(features, scaler, model):
+    # Scale the features
+    scaled_features = scaler.transform([features])
+    
+    # Predict the cluster
+    cluster = model.predict(scaled_features)
+    
+    # Calculate the distance to the centroid of the cluster
+    centroid = model.cluster_centers_[cluster[0]]
+    dist = np.linalg.norm(scaled_features - centroid)
+    
+    # Calculate a simple confidence score
+    # Assuming the maximum distance that matters is 3 standard deviations (a heuristic)
+    max_dist = 3 
+    confidence = max(0, 1 - dist / max_dist)
+    
+    return cluster[0], confidence
+
+features = [70, 50]  # Example features: Annual Income (k$), Spending Score (1-100)
+cluster_label, confidence = predict_customer_cluster(features, scaler, kmeans)
+print(f'The customer belongs to cluster: {cluster_label} with confidence: {confidence:.2f}')
 
 
 # %%
